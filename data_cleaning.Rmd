@@ -1,0 +1,200 @@
+---
+title: "data cleaning"
+author: "Hanyuan"
+date: "June 14, 2017"
+output: pdf_document
+---
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r}
+#load data
+rent <- read.csv('fang88_rent.csv',na.strings=c("NA","NaN", " ","","NULL","N/A"))
+house <- read.csv('home.csv',na.strings=c("NA","NaN", " ","", "NULL","N/A"))
+```
+
+```{r}
+#pick the columns to use in rent and check the statistics of rent dataset
+rent_use <- rent[,5:6]
+str(rent_use)
+summary(rent_use)
+rent_use$unique_id <- as.character(rent_use$unique_id)
+```
+
+```{r}
+#remove duplicated unique_id
+rent_use[duplicated(rent_use$unique_id),]
+rent_use <- rent_use %>%
+  distinct(unique_id, .keep_all = TRUE)
+```
+
+```{r}
+#check the statistics of house dataset
+str(house)
+summary(house)
+
+#remove duplicated unique_id
+house[duplicated(house$unique_id),]
+house$unique_id <- as.character(house$unique_id)
+```
+
+```{r}
+#left join house with rent_use by unique_id
+house_rent <- merge(house,rent_use, by="unique_id",all.x = TRUE) #left join
+str(house_rent)
+summary(house_rent)
+```
+
+
+```{r}
+#create a function imp.median to replace NA with median
+imp.median <- function (a){
+  missing <- is.na(a)
+  imputed <- a
+  imputed[missing] <- median(a,  na.rm=TRUE)
+  return (imputed)
+}
+```
+
+
+```{r}
+#cleaning of feature:bathrooms
+house_rent$bathrooms <- imp.median(house_rent$bathrooms) # interpolate median
+
+quantile(house_rent$bathrooms, c(0,0.01,0.9999,1), na.rm = TRUE) #capping of outliers--0.9999
+house_rent$bathrooms[house_rent$bathrooms > quantile(house_rent$bathrooms,0.9999, na.rm = TRUE)] =
+  quantile(house_rent$bathrooms, 0.9999, na.rm = TRUE)
+
+# visulization 
+ggplot(house_rent, aes(bathrooms)) +
+  geom_histogram(binwidth = 1)
+
+```
+
+
+```{r}
+#cleaning of feature:bedrooms
+house_rent$bedrooms <- imp.median(house_rent$bedrooms) #interpolate median
+
+quantile(house_rent$bedrooms, c(0, 0.01, 0.9999,1), na.rm = TRUE) #capping of outliers--0.9999
+house_rent$bedrooms[house_rent$bedrooms > quantile(house_rent$bedrooms,0.9999, na.rm = TRUE)] =
+  quantile(house_rent$bedrooms, 0.9999, na.rm = TRUE)
+
+#visualization
+ggplot(house_rent, aes(bedrooms)) +
+  geom_histogram(binwidth = 1)
+
+```
+
+```{r}
+#cleaning of feature:list_price
+house_rent$list_price <- imp.median(house_rent$list_price) #interpolate median
+
+quantile(house_rent$list_price, c(0,0.01,0.9999,1), na.rm = TRUE) #capping of outliers--0.9999
+house_rent$list_price[house_rent$list_price > quantile(house_rent$list_price,0.9999, na.rm = TRUE)] = 
+  quantile(house_rent$list_price, 0.9999, na.rm = TRUE)
+#visualization -- right skewed
+ggplot(house_rent, aes(list_price)) +
+  geom_histogram(binwidth = 100000)
+```
+
+
+```{r}
+#cleaning of feature:latitude and longtitude
+house_rent$latitude <- imp.median(house_rent$latitude) #interpolate median
+house_rent$longitude <- imp.median(house_rent$longitude)
+```
+
+```{r}
+#cleaning of feature:lot_sqft
+house_rent$lot_sqft <- imp.median(house_rent$lot_sqft)#interpolate median
+
+quantile(house_rent$lot_sqft, c(0,0.01,0.9995,1), na.rm = TRUE)#capping of outliers--0.9995
+
+house_rent$lot_sqft[house_rent$lot_sqft > quantile(house_rent$lot_sqft,0.9995, na.rm = TRUE)] = 
+  quantile(house_rent$lot_sqft, 0.9995, na.rm = TRUE)
+
+# visualization -- right-skewed
+ggplot(house_rent, aes(lot_sqft)) +
+  geom_histogram(binwidth = 10000) 
+
+```
+
+```{r}
+#cleaning of feature:sqft
+house_rent$sqft <- imp.median(house_rent$sqft) #interpolate median
+
+quantile(house_rent$sqft, c(0,0.01,0.9995,1), na.rm = TRUE) #capping of outliers--0.9995
+house_rent$sqft[house_rent$sqft > quantile(house_rent$sqft,0.9995, na.rm = TRUE)] = 
+  quantile(house_rent$sqft, 0.9995, na.rm = TRUE)
+
+#visualization -- right-skewed
+ggplot(house_rent, aes(sqft)) +
+  geom_histogram(binwidth = 1000) 
+```
+
+
+```{r}
+#cleaning of feature:year_built
+house_rent$year_built <- imp.median(house_rent$year_built) #interpolate median
+
+#for year_built, earlier than 1000 and later than 2017 will be replaced by median
+house_rent$year_built[house_rent$year_built < 1000 | house_rent$year_built > 2017] <-
+  median(house_rent$year_built)
+#visualization -- left-skewed
+ggplot(house_rent, aes(year_built)) +
+  geom_histogram(binwidth = 20)
+
+```
+
+```{r}
+#cleaning of feature: state and zip code
+#chose rows with state/zip not being NA
+#zip code completion for zip codes equals 5 digits (add 0 in the front)
+length(house_rent[as.numeric(as.character(house_rent$zip))<=1000,]$zip)
+#since those less than 4 digits are of small number, so delete the records
+
+house_rent$state[house_rent$state == 'hi'] = "HI"
+
+house_rent <- subset(house_rent, state %in% c( "AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA","HI","IA","ID",
+                                              "IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT","NC",
+                                              "ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC","SD",
+                                              "TN","TX","UT","VA", "VT","WA", "WI", "WV", "WY",
+                                              "XX","Hi","Unk","Ha","BJ"))
+
+
+house_rent <- house_rent[as.numeric(as.character(house_rent$zip))>=10000 &
+                               as.numeric(as.character(house_rent$zip))<=99999,]
+
+
+house_rent<- house_rent[!is.na(house_rent$zip),]
+
+house_rent<- house_rent[!is.na(house_rent$property_type),]
+house_rent$property_type[house_rent$property_type == 'Other'] = "OTHER"
+```
+
+
+```{r}
+#cleaning of feature:rentzestimate_amount
+#house_rent$rentzestimate_amount <- imp.median(house_rent$rentzestimate_amount) #interpolate median
+
+quantile(house_rent$rentzestimate, c(0,0.01,0.9999,1), na.rm = TRUE) 
+#visualization -- right-skewed
+ggplot(house_rent, aes(rentzestimate_amount)) +
+  geom_histogram(binwidth = 1000) + 
+  xlim(0,50000)
+
+```
+
+
+```{r}
+#checked the statistics of the cleaned dataset again
+summary(house_rent)
+
+#save as csv
+write.csv(house_rent,'house_rent_2.csv')
+```
+
